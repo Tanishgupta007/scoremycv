@@ -1,6 +1,5 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import google.generativeai as genai
 import pdfplumber
 import docx2txt
@@ -8,7 +7,6 @@ import io
 import os
 import json
 import razorpay
-from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,25 +15,20 @@ app = FastAPI(title="AI Resume Analyzer")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://scoremycv-alpha.vercel.app",
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_credentials=True,
 )
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
 razorpay_client = razorpay.Client(
-    auth=(os.getenv("RAZORPAY_KEY_ID"), os.getenv("RAZORPAY_KEY_SECRET"))
+    auth=(os.getenv("RAZORPAY_KEY_ID", "dummy"), os.getenv("RAZORPAY_KEY_SECRET", "dummy"))
 )
 
-# --- In-memory usage tracker (use Redis/DB in production) ---
-usage_store = {}  # { email: scan_count }
-
-FREE_LIMIT = 1  # 1 free scan
+usage_store = {}
+FREE_LIMIT = 1
 
 
 def extract_text(file_bytes: bytes, filename: str) -> str:
@@ -48,11 +41,26 @@ def extract_text(file_bytes: bytes, filename: str) -> str:
         raise HTTPException(status_code=400, detail="Only PDF or DOCX files supported.")
 
 
-def analyze_with_gpt(resume_text: str, job_role: str) -> dict:
+def analyze_with_gemini(resume_text: str, job_role: str, job_description: str = "") -> dict:
+    jd_section = ""
+    if job_description.strip():
+        jd_section = f"""
+A specific job description has been provided. Compare the resume against it.
+
+Job Description:
+\"\"\"{job_description[:3000]}\"\"\"
+
+Populate the jd_match object with real data.
+"""
+    else:
+        jd_section = "No job description provided. Set jd_match to null."
+
     prompt = f"""
 You are an expert ATS resume reviewer. Analyze the following resume for the role: "{job_role}".
 
-Return a JSON object with exactly these fields:
+{jd_section}
+
+Return ONLY a valid JSON object with no extra text, no markdown, no code blocks:
 {{
   "ats_score": <number 0-100>,
   "summary": "<2-3 sentence overview>",
@@ -65,22 +73,20 @@ Return a JSON object with exactly these fields:
     "education": <0-100>,
     "formatting": <0-100>
   }},
-  "verdict": "<one of: Strong, Good, Needs Work, Weak>"
+  "verdict": "<one of: Strong, Good, Needs Work, Weak>",
+  "jd_match": null
 }}
 
 Resume:
 {resume_text[:4000]}
 """
+
     model = genai.GenerativeModel("gemini-1.5-flash")
     response = model.generate_content(prompt)
     raw = response.text.strip()
-
-    # Strip markdown code blocks if present
-    raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+    raw = raw.lstrip("```json").lstrip("```").rstrip("```").strip()
     return json.loads(raw)
 
-
-# --- Routes ---
 
 @app.get("/")
 def root():
@@ -91,9 +97,9 @@ def root():
 async def analyze_resume(
     file: UploadFile = File(...),
     job_role: str = "Software Engineer",
+    job_description: str = "",
     email: str = "guest",
 ):
-    # Check free usage
     scans = usage_store.get(email, 0)
     if scans >= FREE_LIMIT:
         raise HTTPException(
@@ -107,9 +113,7 @@ async def analyze_resume(
     if len(resume_text.strip()) < 100:
         raise HTTPException(status_code=400, detail="Could not extract enough text from resume.")
 
-    result = analyze_with_gpt(resume_text, job_role)
-
-    # Increment usage
+    result = analyze_with_gemini(resume_text, job_role, job_description)
     usage_store[email] = scans + 1
 
     return {
@@ -122,7 +126,7 @@ async def analyze_resume(
 
 @app.post("/create-order")
 def create_order(data: dict):
-    amount = data.get("amount", 29900)  # ₹299 in paise
+    amount = data.get("amount", 29900)
     order = razorpay_client.order.create({
         "amount": amount,
         "currency": "INR",
@@ -140,7 +144,7 @@ def verify_payment(data: dict):
             "razorpay_signature": data["signature"],
         })
         email = data.get("email", "guest")
-        usage_store[email] = 0  # Reset usage after payment
+        usage_store[email] = 0
         return {"success": True, "message": "Payment verified. Scans reset!"}
     except Exception:
         raise HTTPException(status_code=400, detail="Payment verification failed.")
