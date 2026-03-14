@@ -28,7 +28,7 @@ razorpay_client = razorpay.Client(
 )
 
 usage_store = {}
-FREE_LIMIT = 1
+FREE_LIMIT = 100
 
 
 def extract_text(file_bytes: bytes, filename: str) -> str:
