@@ -31,9 +31,10 @@ export default function Upload({ setResult, email, setEmail }) {
     formData.append("email", email);
 
     try {
-      const res = await fetch(`${API}/analyze`, {
-        method: "POST",
+      const res = await fetch(`${API}/analyze`, { 
+        method: "POST", 
         body: formData,
+        signal: AbortSignal.timeout(120000)
       });
       const json = await res.json();
       if (!res.ok) {
