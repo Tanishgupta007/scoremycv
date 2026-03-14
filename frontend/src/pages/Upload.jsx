@@ -5,6 +5,7 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 export default function Upload({ setResult, email, setEmail }) {
   const [file, setFile] = useState(null);
   const [jobRole, setJobRole] = useState("Software Engineer");
+  const [jobDescription, setJobDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
@@ -28,21 +29,16 @@ export default function Upload({ setResult, email, setEmail }) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("job_role", jobRole);
+    formData.append("job_description", jobDescription);
     formData.append("email", email);
 
     try {
-      const res = await fetch(`${API}/analyze`, { 
-        method: "POST", 
-        body: formData,
-        signal: AbortSignal.timeout(120000)
-      });
+      const res = await fetch(`${API}/analyze`, { method: "POST", body: formData });
       const json = await res.json();
       if (!res.ok) {
-        if (res.status === 402) {
-          setError("🔒 Free limit reached! Upgrade to continue analyzing.");
-        } else {
-          setError(json.detail || "Something went wrong.");
-        }
+        setError(res.status === 402
+          ? "🔒 Free limit reached! Upgrade to continue analyzing."
+          : json.detail || "Something went wrong.");
         return;
       }
       setResult(json);
@@ -61,6 +57,7 @@ export default function Upload({ setResult, email, setEmail }) {
       </div>
 
       <div className="card upload-card">
+        {/* Dropzone */}
         <div
           className={`dropzone ${dragOver ? "drag-active" : ""} ${file ? "has-file" : ""}`}
           onClick={() => inputRef.current.click()}
@@ -84,36 +81,43 @@ export default function Upload({ setResult, email, setEmail }) {
           )}
         </div>
 
+        {/* Email + Role row */}
         <div className="form-row">
           <div className="form-group">
             <label>Your Email</label>
-            <input
-              type="email"
-              placeholder="you@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <input type="email" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="form-group">
             <label>Target Job Role</label>
-            <input
-              type="text"
-              placeholder="e.g. Software Engineer"
-              value={jobRole}
-              onChange={(e) => setJobRole(e.target.value)}
-            />
+            <input type="text" placeholder="e.g. Software Engineer" value={jobRole} onChange={(e) => setJobRole(e.target.value)} />
           </div>
+        </div>
+
+        {/* JD textarea — the new killer feature */}
+        <div className="form-group" style={{ marginBottom: "20px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            Paste Job Description
+            <span className="badge-new">NEW</span>
+            <span style={{ fontSize: "11px", color: "var(--muted)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+              — optional but gives you a match score for this specific job
+            </span>
+          </label>
+          <textarea
+            placeholder="Paste the full job description here... We'll tell you exactly how well your resume matches this role, which keywords you're missing, and what to fix."
+            value={jobDescription}
+            onChange={(e) => setJobDescription(e.target.value)}
+            rows={5}
+          />
         </div>
 
         {error && <div className="error-box">{error}</div>}
 
         <button className="btn-primary" onClick={handleSubmit} disabled={loading}>
           {loading ? (
-            <span className="loading-text">
-              <span className="spinner" />
-              Analyzing your resume...
-            </span>
-          ) : "Analyze My Resume →"}
+            <span className="loading-text"><span className="spinner" />Analyzing your resume...</span>
+          ) : (
+            jobDescription.trim() ? "Analyze & Match to Job →" : "Analyze My Resume →"
+          )}
         </button>
 
         <p className="free-note">✅ First analysis is completely free</p>
@@ -122,8 +126,8 @@ export default function Upload({ setResult, email, setEmail }) {
       <div className="features">
         {[
           { icon: "🎯", title: "ATS Score", desc: "See exactly how recruiters' systems rate you" },
-          { icon: "🔑", title: "Missing Keywords", desc: "Know what words to add for your target role" },
-          { icon: "⚡", title: "Instant Results", desc: "Get your full report in under 10 seconds" },
+          { icon: "🔗", title: "JD Match Score", desc: "Paste any job post — get a match % instantly" },
+          { icon: "🔑", title: "Missing Keywords", desc: "Know exactly what words to add for the role" },
         ].map((f) => (
           <div className="feature-card" key={f.title}>
             <span className="feature-icon">{f.icon}</span>
