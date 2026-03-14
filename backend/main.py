@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import google.generativeai as genai
+from groq import Groq
 import pdfplumber
 import docx2txt
 import io
@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 razorpay_client = razorpay.Client(
     auth=(os.getenv("RAZORPAY_KEY_ID", "dummy"), os.getenv("RAZORPAY_KEY_SECRET", "dummy"))
@@ -41,7 +41,7 @@ def extract_text(file_bytes: bytes, filename: str) -> str:
         raise HTTPException(status_code=400, detail="Only PDF or DOCX files supported.")
 
 
-def analyze_with_gemini(resume_text: str, job_role: str, job_description: str = "") -> dict:
+def analyze_with_groq(resume_text: str, job_role: str, job_description: str = "") -> dict:
     jd_section = ""
     if job_description.strip():
         jd_section = f"""
@@ -50,7 +50,7 @@ A specific job description has been provided. Compare the resume against it.
 Job Description:
 \"\"\"{job_description[:3000]}\"\"\"
 
-Populate the jd_match object with real data.
+Populate the jd_match object with real data from comparing resume vs job description.
 """
     else:
         jd_section = "No job description provided. Set jd_match to null."
@@ -60,7 +60,7 @@ You are an expert ATS resume reviewer. Analyze the following resume for the role
 
 {jd_section}
 
-Return ONLY a valid JSON object with no extra text, no markdown, no code blocks:
+Return ONLY a valid JSON object. No extra text, no markdown, no code blocks, just raw JSON:
 {{
   "ats_score": <number 0-100>,
   "summary": "<2-3 sentence overview>",
@@ -81,9 +81,12 @@ Resume:
 {resume_text[:4000]}
 """
 
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(prompt)
-    raw = response.text.strip()
+    response = groq_client.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+    )
+    raw = response.choices[0].message.content.strip()
     raw = raw.lstrip("```json").lstrip("```").rstrip("```").strip()
     return json.loads(raw)
 
@@ -113,7 +116,7 @@ async def analyze_resume(
     if len(resume_text.strip()) < 100:
         raise HTTPException(status_code=400, detail="Could not extract enough text from resume.")
 
-    result = analyze_with_gemini(resume_text, job_role, job_description)
+    result = analyze_with_groq(resume_text, job_role, job_description)
     usage_store[email] = scans + 1
 
     return {
