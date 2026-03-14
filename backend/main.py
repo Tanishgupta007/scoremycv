@@ -81,7 +81,7 @@ Resume:
 {resume_text[:4000]}
 """
 
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-2.0-flash")
     response = model.generate_content(prompt)
     raw = response.text.strip()
     raw = raw.lstrip("```json").lstrip("```").rstrip("```").strip()
