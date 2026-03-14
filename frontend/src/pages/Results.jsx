@@ -121,7 +121,7 @@ export default function Results({ result, email, onReset }) {
         </div>
 
         {/* Upgrade card */}
-        {result.scans_used >= result.free_limit && (
+        {true && (
           <div className="card upgrade-card">
             <h3>🚀 Unlock Unlimited Scans</h3>
             <p>You've used your free scan. Upgrade for ₹299/month to analyze unlimited resumes.</p>
