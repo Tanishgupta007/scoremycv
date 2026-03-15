@@ -38,6 +38,7 @@ function Bar({ label, value }) {
 
 export default function Results({ result, email, onReset }) {
   const [paid, setPaid] = useState(false);
+  const [paymentPending, setPaymentPending] = useState(false);
   const d = result.data;
   const jd = d.jd_match;
 
@@ -49,6 +50,7 @@ export default function Results({ result, email, onReset }) {
         body: JSON.stringify({ amount: 29900 }),
       });
       const { order_id, amount } = await orderRes.json();
+
       const options = {
         key: RAZORPAY_KEY,
         amount,
@@ -56,25 +58,22 @@ export default function Results({ result, email, onReset }) {
         name: "ScoreMyCV",
         description: "Unlimited Resume Scans",
         order_id,
-        handler: async (response) => {
-          try {
-            const verify = await fetch(`${API}/verify-payment`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ ...response, email }),
-            });
-            const v = await verify.json();
-            if (v.success) {
-              setPaid(true);
-            }
-          } catch {
-            setPaid(true); // Show success even if verify fails
+        handler: function(response) {
+          console.log("Payment handler fired", response);
+          setPaid(true);
+          setPaymentPending(false);
+        },
+        modal: {
+          ondismiss: function() {
+            setPaymentPending(true);
           }
         },
         prefill: { email },
         theme: { color: "#6366f1" },
       };
-      new window.Razorpay(options).open();
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
     } catch (err) {
       alert("Could not open payment. Please try again.");
     }
@@ -89,14 +88,12 @@ export default function Results({ result, email, onReset }) {
 
       <div className="results-grid">
 
-        {/* ATS Score */}
         <div className="card score-card">
           <ScoreRing score={d.ats_score} />
           <div className="verdict" style={{ color: verdictColor[d.verdict] }}>{d.verdict}</div>
           <p className="summary-text">{d.summary}</p>
         </div>
 
-        {/* JD Match */}
         {jd && jd.match_score !== null ? (
           <div className="card score-card jd-match-card">
             <div className="jd-match-badge">JD Match</div>
@@ -127,7 +124,6 @@ export default function Results({ result, email, onReset }) {
           </div>
         )}
 
-        {/* Section scores */}
         <div className="card">
           <h3>Section Breakdown</h3>
           {Object.entries(d.section_scores).map(([k, v]) => (
@@ -135,19 +131,16 @@ export default function Results({ result, email, onReset }) {
           ))}
         </div>
 
-        {/* Strengths */}
         <div className="card">
           <h3>✅ Strengths</h3>
           <ul className="list green">{d.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
         </div>
 
-        {/* Improvements */}
         <div className="card">
           <h3>🔧 Improvements</h3>
           <ul className="list amber">{d.improvements.map((s, i) => <li key={i}>{s}</li>)}</ul>
         </div>
 
-        {/* Missing keywords */}
         <div className="card keywords-card">
           <h3>🔑 Missing Keywords</h3>
           <div className="keyword-chips">
@@ -155,20 +148,34 @@ export default function Results({ result, email, onReset }) {
           </div>
         </div>
 
-        {/* Upgrade / Paid */}
         {paid ? (
           <div className="card upgrade-card" style={{ borderColor: "rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.05)" }}>
             <h3>✅ Premium Active!</h3>
             <p>You have unlimited scans. Analyze as many resumes as you want!</p>
-            <button className="btn-primary" style={{ background: "linear-gradient(135deg,#22c55e,#16a34a)", maxWidth: 280, margin: "0 auto" }} onClick={onReset}>
+            <button className="btn-primary" onClick={onReset}
+              style={{ background: "linear-gradient(135deg,#22c55e,#16a34a)", maxWidth: 280, margin: "0 auto" }}>
               Analyze Another Resume →
+            </button>
+          </div>
+        ) : paymentPending ? (
+          <div className="card upgrade-card" style={{ borderColor: "rgba(251,191,36,0.4)", background: "rgba(251,191,36,0.05)" }}>
+            <h3>⏳ Payment Completed?</h3>
+            <p>If your payment was successful, click the button below to activate your premium access.</p>
+            <button className="btn-primary" onClick={() => setPaid(true)}
+              style={{ maxWidth: 280, margin: "0 auto 12px" }}>
+              ✅ Yes, Activate Premium
+            </button>
+            <button className="btn-outline" onClick={() => setPaymentPending(false)}
+              style={{ width: "100%", maxWidth: 280, margin: "0 auto" }}>
+              No, Try Again
             </button>
           </div>
         ) : (
           <div className="card upgrade-card">
             <h3>🚀 Unlock Unlimited Scans</h3>
             <p>Upgrade for ₹299/month to analyze unlimited resumes and get JD match scores for every job you apply to.</p>
-            <button className="btn-primary" onClick={handleUpgrade} style={{ maxWidth: 280, margin: "0 auto" }}>
+            <button className="btn-primary" onClick={handleUpgrade}
+              style={{ maxWidth: 280, margin: "0 auto" }}>
               Upgrade — ₹299/month
             </button>
           </div>
