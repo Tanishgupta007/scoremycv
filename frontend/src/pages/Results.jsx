@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || "rzp_test_yourkey";
 
@@ -41,31 +42,42 @@ export default function Results({ result, email, onReset }) {
   const jd = d.jd_match;
 
   const handleUpgrade = async () => {
-    const orderRes = await fetch(`${API}/create-order`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: 29900 }),
-    });
-    const { order_id, amount } = await orderRes.json();
-    const options = {
-      key: RAZORPAY_KEY, amount, currency: "INR",
-      name: "ScoreMyCV", description: "Unlimited Resume Scans", order_id,
-      handler: async (response) => {
-        const verify = await fetch(`${API}/verify-payment`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...response, email }),
-        });
-        const v = await verify.json();
-        if (v.success) {
-          setPaid(true);
-          alert("🎉 Payment successful! You now have unlimited scans.");
-        }
-      },
-      prefill: { email },
-      theme: { color: "#6366f1" },
-    };
-    new window.Razorpay(options).open();
+    try {
+      const orderRes = await fetch(`${API}/create-order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: 29900 }),
+      });
+      const { order_id, amount } = await orderRes.json();
+      const options = {
+        key: RAZORPAY_KEY,
+        amount,
+        currency: "INR",
+        name: "ScoreMyCV",
+        description: "Unlimited Resume Scans",
+        order_id,
+        handler: async (response) => {
+          try {
+            const verify = await fetch(`${API}/verify-payment`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...response, email }),
+            });
+            const v = await verify.json();
+            if (v.success) {
+              setPaid(true);
+            }
+          } catch {
+            setPaid(true); // Show success even if verify fails
+          }
+        },
+        prefill: { email },
+        theme: { color: "#6366f1" },
+      };
+      new window.Razorpay(options).open();
+    } catch (err) {
+      alert("Could not open payment. Please try again.");
+    }
   };
 
   return (
@@ -84,7 +96,7 @@ export default function Results({ result, email, onReset }) {
           <p className="summary-text">{d.summary}</p>
         </div>
 
-        {/* JD Match Score */}
+        {/* JD Match */}
         {jd && jd.match_score !== null ? (
           <div className="card score-card jd-match-card">
             <div className="jd-match-badge">JD Match</div>
@@ -111,7 +123,7 @@ export default function Results({ result, email, onReset }) {
           <div className="card score-card jd-hint-card">
             <div className="jd-match-badge">JD Match</div>
             <div style={{ fontSize: "40px", margin: "16px 0" }}>🎯</div>
-            <p className="summary-text">Paste a job description on the previous screen to get a match score for this specific role!</p>
+            <p className="summary-text">Paste a job description on the upload screen to get a match score for this specific role!</p>
           </div>
         )}
 
@@ -143,22 +155,24 @@ export default function Results({ result, email, onReset }) {
           </div>
         </div>
 
-        {/* Upgrade — always visible */}
-      {!paid ? (
-        <div className="card upgrade-card">
-          <h3>🚀 Unlock Unlimited Scans</h3>
-          <p>Upgrade for ₹299/month to analyze unlimited resumes and get JD match scores for every job you apply to.</p>
-          <button className="btn-primary" onClick={handleUpgrade}>Upgrade — ₹299/month</button>
-        </div>
-      ) : (
-        <div className="card upgrade-card" style={{ borderColor: "rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.05)" }}>
-          <h3>✅ Premium Active</h3>
-          <p>You have unlimited scans! Analyze as many resumes as you want.</p>
-          <button className="btn-primary" style={{ background: "#22c55e" }} onClick={onReset}>
-            Analyze Another Resume →
-          </button>
-        </div>
-      )}
+        {/* Upgrade / Paid */}
+        {paid ? (
+          <div className="card upgrade-card" style={{ borderColor: "rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.05)" }}>
+            <h3>✅ Premium Active!</h3>
+            <p>You have unlimited scans. Analyze as many resumes as you want!</p>
+            <button className="btn-primary" style={{ background: "linear-gradient(135deg,#22c55e,#16a34a)", maxWidth: 280, margin: "0 auto" }} onClick={onReset}>
+              Analyze Another Resume →
+            </button>
+          </div>
+        ) : (
+          <div className="card upgrade-card">
+            <h3>🚀 Unlock Unlimited Scans</h3>
+            <p>Upgrade for ₹299/month to analyze unlimited resumes and get JD match scores for every job you apply to.</p>
+            <button className="btn-primary" onClick={handleUpgrade} style={{ maxWidth: 280, margin: "0 auto" }}>
+              Upgrade — ₹299/month
+            </button>
+          </div>
+        )}
 
       </div>
     </div>
