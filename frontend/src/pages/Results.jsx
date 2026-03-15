@@ -1,3 +1,4 @@
+import { useState } from "react";
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY || "rzp_test_yourkey";
 
@@ -35,6 +36,7 @@ function Bar({ label, value }) {
 }
 
 export default function Results({ result, email, onReset }) {
+  const [paid, setPaid] = useState(false);
   const d = result.data;
   const jd = d.jd_match;
 
@@ -55,7 +57,10 @@ export default function Results({ result, email, onReset }) {
           body: JSON.stringify({ ...response, email }),
         });
         const v = await verify.json();
-        if (v.success) alert("🎉 Payment successful! You now have unlimited scans.");
+        if (v.success) {
+          setPaid(true);
+          alert("🎉 Payment successful! You now have unlimited scans.");
+        }
       },
       prefill: { email },
       theme: { color: "#6366f1" },
@@ -139,11 +144,21 @@ export default function Results({ result, email, onReset }) {
         </div>
 
         {/* Upgrade — always visible */}
+      {!paid ? (
         <div className="card upgrade-card">
           <h3>🚀 Unlock Unlimited Scans</h3>
           <p>Upgrade for ₹299/month to analyze unlimited resumes and get JD match scores for every job you apply to.</p>
           <button className="btn-primary" onClick={handleUpgrade}>Upgrade — ₹299/month</button>
         </div>
+      ) : (
+        <div className="card upgrade-card" style={{ borderColor: "rgba(34,197,94,0.4)", background: "rgba(34,197,94,0.05)" }}>
+          <h3>✅ Premium Active</h3>
+          <p>You have unlimited scans! Analyze as many resumes as you want.</p>
+          <button className="btn-primary" style={{ background: "#22c55e" }} onClick={onReset}>
+            Analyze Another Resume →
+          </button>
+        </div>
+      )}
 
       </div>
     </div>
