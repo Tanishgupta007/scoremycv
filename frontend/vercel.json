@@ -1,0 +1,5 @@
+{
+  "buildCommand": "npm install --force && npx --yes vite build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install --force"
+}
